@@ -25,7 +25,7 @@ class QuestManager:
         self.quests: dict[str, QuestState] = {
             QUEST_FIND_ARTIFACTS: QuestState(
                 quest_id=QUEST_FIND_ARTIFACTS,
-                description="Collect the three ancient totems hidden around the village.",
+                description="Gather the three Heart Shards scattered across the region.",
                 items_required=3,
             )
         }

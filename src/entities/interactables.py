@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol
 
 import pygame
+
+
+ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
+DEFAULT_NPC_SPRITE = ASSETS_DIR / "characters" / "cloaked-figure.png"
 
 
 class PlayStateLike(Protocol):
@@ -32,10 +37,18 @@ class Interactable:
 
 
 class NPC(Interactable):
-    def __init__(self, object_id: str, rect: pygame.Rect, dialogue_id: str) -> None:
+    _sprite_cache: dict[Path, pygame.Surface] = {}
+
+    def __init__(
+        self,
+        object_id: str,
+        rect: pygame.Rect,
+        dialogue_id: str,
+        sprite_path: Path | None = None,
+    ) -> None:
         super().__init__(object_id, rect)
         self.dialogue_id = dialogue_id
-        self.color = (255, 200, 120)
+        self.sprite_path = sprite_path if sprite_path is not None else DEFAULT_NPC_SPRITE
 
     def set_dialogue(self, dialogue_id: str) -> None:
         self.dialogue_id = dialogue_id
@@ -44,8 +57,23 @@ class NPC(Interactable):
         play_state.begin_dialogue(self.dialogue_id)
 
     def draw(self, surface: pygame.Surface, camera_offset: pygame.Vector2) -> None:
-        draw_rect = self.rect.move(-camera_offset.x, -camera_offset.y)
-        pygame.draw.rect(surface, self.color, draw_rect)
+        sprite = self._load_sprite(self.sprite_path)
+        world_rect = self.rect.move(-camera_offset.x, -camera_offset.y)
+        sprite_rect = sprite.get_rect(midbottom=world_rect.midbottom)
+        surface.blit(sprite, sprite_rect)
+
+    @classmethod
+    def _load_sprite(cls, path: Path) -> pygame.Surface:
+        sprite = cls._sprite_cache.get(path)
+        if sprite is None:
+            if not path.exists():
+                raise FileNotFoundError(f"NPC sprite not found at {path}")
+            sheet = pygame.image.load(str(path)).convert_alpha()
+            frame_width = sheet.get_width() // 3
+            frame_height = sheet.get_height() // 4
+            sprite = sheet.subsurface(pygame.Rect(0, 0, frame_width, frame_height)).copy()
+            cls._sprite_cache[path] = sprite
+        return sprite
 
 
 class DoorInteractable(Interactable):
@@ -77,7 +105,6 @@ class QuestItem(Interactable):
         super().__init__(object_id, rect)
         self.dialogue_id = dialogue_id
         self.quest_event = quest_event
-        self.color = (120, 200, 255)
 
     def interact(self, play_state: PlayStateLike) -> None:
         play_state.begin_dialogue(self.dialogue_id)
@@ -85,8 +112,7 @@ class QuestItem(Interactable):
         self.enabled = False
 
     def draw(self, surface: pygame.Surface, camera_offset: pygame.Vector2) -> None:
-        draw_rect = self.rect.move(-camera_offset.x, -camera_offset.y)
-        pygame.draw.rect(surface, self.color, draw_rect)
+        return
 
 
 class LoreObject(Interactable):

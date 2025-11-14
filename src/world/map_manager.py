@@ -79,6 +79,10 @@ class GameMap:
             self._draw_collision_debug()
 
         self.interactables = [factory() for factory in definition.interactables]
+        for interactable in self.interactables:
+            if isinstance(interactable, QuestItem):
+                continue
+            self.colliders.append(interactable.rect.copy())
         if definition.tmx_path is not None:
             tmx_interactables = self._load_tmx_interactables(definition)
             if tmx_interactables:
@@ -213,8 +217,14 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
             ),
             lambda: NPC(
                 "npc_mia",
-                rect(520, 420, TILE_SIZE, TILE_SIZE + 16),
+                rect(56 * TILE_SIZE, 27 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
                 "mia_intro",
+            ),
+            lambda: NPC(
+                "npc_sally",
+                rect(95 * TILE_SIZE, 22 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                "sally_missing",
+                sprite_path=ASSETS_DIR / "characters" / "salley.png",
             ),
             lambda: LoreObject(
                 "village_sign",
@@ -238,6 +248,12 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
                 rect(1250, 900, TILE_SIZE, TILE_SIZE),
                 "quest_item_c",
                 "quest_item_collected",
+            ),
+            lambda: QuestItem(
+                "quest_flower",
+                rect(106 * TILE_SIZE, 25 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                "sally_flower_item",
+                "flower_found",
             ),
         ]
 
