@@ -1,0 +1,36 @@
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+
+TILE_SIZE = 16
+
+RENDER_SCALE = 2
+VIEW_WIDTH = SCREEN_WIDTH // RENDER_SCALE
+VIEW_HEIGHT = SCREEN_HEIGHT // RENDER_SCALE
+
+# Input bindings
+KEY_CONFIRM = "space"
+KEY_INTERACT = "e"
+KEY_MENU_UP = "up"
+KEY_MENU_DOWN = "down"
+
+# Map identifiers
+MAP_OUTSIDE_VILLAGE = "outside_village"
+MAP_OUTSIDE_FOREST = "outside_forest"
+MAP_INTERIOR_HOME = "interior_home"
+
+# Dialogue settings
+DIALOGUE_FONT_NAME = "freesansbold"
+DIALOGUE_FONT_SIZE = 20
+DIALOGUE_TEXT_COLOR = (255, 255, 255)
+DIALOGUE_BG_COLOR = (20, 20, 20)
+DIALOGUE_PADDING = 16
+
+# Menu settings
+MENU_FONT_SIZE = 36
+MENU_SELECTED_COLOR = (255, 255, 0)
+MENU_UNSELECTED_COLOR = (200, 200, 200)
+
+# Quest identifiers
+QUEST_FIND_ARTIFACTS = "find_artifacts"
+
