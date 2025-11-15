@@ -47,6 +47,7 @@ class PlayState(GameState):
         self.current_prompt: str | None = None
         self.focus_interactable: Interactable | None = None
         self.end_screen_active = False
+        self.quest_tracker_visible = False
 
         self._register_dialogues()
         self.begin_dialogue("home_intro")
@@ -150,6 +151,7 @@ class PlayState(GameState):
 
         if event_name == "quest_begin":
             self.current_prompt = "Collect the three Heart Shards the cloaked figure described."
+            self.quest_tracker_visible = True
             return
 
         if event_name == "quest_turn_in":
@@ -171,6 +173,10 @@ class PlayState(GameState):
             if sally and isinstance(sally, NPC):
                 sally.set_dialogue("sally_repeat")
             self.current_prompt = "You obtained a Heart Shard!"
+            self.quest_manager.handle_event(
+                "quest_item_collected",
+                {"object_id": "quest_totem_b"},
+            )
             return
 
         if event_name == "show_ending":
@@ -185,6 +191,31 @@ class PlayState(GameState):
 
         if event_name == "home_intro_end":
             self.current_prompt = "Someone's knocking. Maybe I should check the door."
+            return
+
+        if event_name == "fisher_story_stage1":
+            fisher = self._get_interactable("npc_fisher")
+            if fisher and isinstance(fisher, NPC):
+                fisher.set_dialogue("fisher_story_stage2")
+            self.current_prompt = "Stay a while with the old fisher."
+            return
+
+        if event_name == "fisher_story_stage2_done":
+            fisher = self._get_interactable("npc_fisher")
+            if fisher and isinstance(fisher, NPC):
+                fisher.set_dialogue("fisher_story_stage3")
+            self.current_prompt = "Listen to the fisher's memories."
+            return
+
+        if event_name == "fisher_story_reward":
+            fisher = self._get_interactable("npc_fisher")
+            if fisher and isinstance(fisher, NPC):
+                fisher.set_dialogue("fisher_repeat")
+            self.current_prompt = "You obtained a Heart Shard!"
+            self.quest_manager.handle_event(
+                "quest_item_collected",
+                {"object_id": "fisher_heart"},
+            )
             return
 
         triggered = self.quest_manager.handle_event(event_name, payload)
@@ -229,6 +260,9 @@ class PlayState(GameState):
         self.camera.y = max(0, min(target_y, max_y))
 
     def _draw_quest_tracker(self, surface: pygame.Surface) -> None:
+        if not self.quest_tracker_visible:
+            return
+
         state = self.quest_manager.quests[QUEST_FIND_ARTIFACTS]
         quest_status = (
             f"Quest: {state.description} "
@@ -408,6 +442,131 @@ class PlayState(GameState):
         )
 
         dm.register(
+            "fisher_intro",
+            [
+                DialogueNode(
+                    "root",
+                    "This lake has been still for years. No one casts a line anymore.",
+                    next_id="line2",
+                ),
+                DialogueNode(
+                    "line2",
+                    "It’s been a while since I’ve spoken to someone.",
+                    next_id="line3",
+                ),
+                DialogueNode(
+                    "line3",
+                    "Do you think you can entertain this old man for a little while?",
+                    choices=[
+                        DialogueChoice("[ Yes ]", next_id="yes_start"),
+                        DialogueChoice("[ Maybe Later ]", next_id="later"),
+                    ],
+                ),
+                DialogueNode(
+                    "yes_start",
+                    "Heh, you know… I used to catch fish bigger than your whole head.",
+                    next_id="yes_2",
+                ),
+                DialogueNode(
+                    "yes_2",
+                    "These days? The only thing biting is mosquitoes.",
+                    next_id="yes_3",
+                ),
+                DialogueNode(
+                    "yes_3",
+                    "Still, having someone around breaks up the silence.",
+                    next_id="yes_4",
+                ),
+                DialogueNode(
+                    "yes_4",
+                    "If I talk to the lake any more it might start talking back.",
+                    next_id="yes_5",
+                ),
+                DialogueNode(
+                    "yes_5",
+                    "Stick around a moment, would you? I promise I won’t make you bait the hook.",
+                    next_id=None,
+                    exit_event="fisher_story_stage1",
+                ),
+                DialogueNode(
+                    "later",
+                    "Maybe another time then. The lake and I will be here.",
+                    next_id=None,
+                ),
+            ],
+        )
+
+        dm.register(
+            "fisher_story_stage2",
+            [
+                DialogueNode(
+                    "root",
+                    "Ahh… it really is nice just having company again.",
+                    next_id="line2",
+                ),
+                DialogueNode(
+                    "line2",
+                    "Most folks pass by without a word. Can’t blame ’em, life moves fast.",
+                    next_id="line3",
+                ),
+                DialogueNode(
+                    "line3",
+                    "But this—just talking, sharing a quiet moment by the water… this means more to me than you know.",
+                    next_id=None,
+                    exit_event="fisher_story_stage2_done",
+                ),
+            ],
+        )
+
+        dm.register(
+            "fisher_story_stage3",
+            [
+                DialogueNode(
+                    "root",
+                    "I used to sit here with someone very dear to me…",
+                    next_id="line2",
+                ),
+                DialogueNode(
+                    "line2",
+                    "and when they were gone, I thought the lake would feel empty forever.",
+                    next_id="line3",
+                ),
+                DialogueNode(
+                    "line3",
+                    "But right now… with you here… it feels like a piece of those days came back to me.",
+                    next_id="line4",
+                ),
+                DialogueNode(
+                    "line4",
+                    "Thank you, truly.",
+                    next_id="line5",
+                ),
+                DialogueNode(
+                    "line5",
+                    "Here, take this — something the water left behind.",
+                    next_id="reward",
+                ),
+                DialogueNode(
+                    "reward",
+                    "**You got a Heart Shard!**",
+                    next_id=None,
+                    exit_event="fisher_story_reward",
+                ),
+            ],
+        )
+
+        dm.register(
+            "fisher_repeat",
+            [
+                DialogueNode(
+                    "root",
+                    "Stay as long as you like. The lake and I appreciate the company.",
+                    next_id=None,
+                )
+            ],
+        )
+
+        dm.register(
             "sally_missing",
             [
                 DialogueNode(
@@ -468,11 +627,44 @@ class PlayState(GameState):
         )
 
         dm.register(
-            "quest_item_a",
+            "forest_sign",
             [
                 DialogueNode(
                     "root",
-                    "A shimmering Heart Shard rests among the cave stones.",
+                    "Fortified Forest ahead.",
+                    next_id=None,
+                )
+            ],
+        )
+
+        dm.register(
+            "cave_sign",
+            [
+                DialogueNode(
+                    "root",
+                    "Cavernous Caves ahead.",
+                    next_id=None,
+                )
+            ],
+        )
+
+        dm.register(
+            "cave_warning",
+            [
+                DialogueNode(
+                    "root",
+                    "Be careful. Many travelers have gotten lost.",
+                    next_id=None,
+                )
+            ],
+        )
+
+        dm.register(
+            "cave_chest",
+            [
+                DialogueNode(
+                    "root",
+                    "**You got a Heart Shard!**",
                     next_id=None,
                 )
             ],

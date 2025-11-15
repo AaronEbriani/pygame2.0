@@ -6,12 +6,7 @@ from typing import Callable
 
 import pygame
 
-from core.settings import (
-    MAP_INTERIOR_HOME,
-    MAP_OUTSIDE_FOREST,
-    MAP_OUTSIDE_VILLAGE,
-    TILE_SIZE,
-)
+from core.settings import MAP_CAVE, MAP_INTERIOR_HOME, MAP_OUTSIDE_FOREST, MAP_OUTSIDE_VILLAGE, TILE_SIZE
 from entities.interactables import DoorInteractable, Interactable, LoreObject, NPC, QuestItem
 from world.tmx_loader import (
     extract_rects_from_object_layers,
@@ -225,6 +220,12 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
                 MAP_INTERIOR_HOME,
                 (31 * TILE_SIZE, 38 * TILE_SIZE),
             ),
+            lambda: DoorInteractable(
+                "cave_entrance",
+                rect(6 * TILE_SIZE, 2 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                MAP_CAVE,
+                (34 * TILE_SIZE, 39 * TILE_SIZE),
+            ),
             lambda: NPC(
                 "npc_mia",
                 rect(56 * TILE_SIZE, 27 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
@@ -236,16 +237,23 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
                 "sally_missing",
                 sprite_path=ASSETS_DIR / "characters" / "salley.png",
             ),
-            lambda: LoreObject(
-                "village_sign",
-                rect(900, 480, TILE_SIZE, TILE_SIZE),
-                "village_sign",
+            lambda: NPC(
+                "npc_fisher",
+                rect(50 * TILE_SIZE, 68 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                "fisher_intro",
+                sprite_path=ASSETS_DIR / "characters" / "old_fisher.png",
             ),
-            lambda: QuestItem(
-                "quest_totem_a",
-                rect(1100, 300, TILE_SIZE, TILE_SIZE),
-                "quest_item_a",
-                "quest_item_collected",
+            lambda: LoreObject(
+                "forest_sign",
+                rect(89 * TILE_SIZE, 33 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                "forest_sign",
+                visible=False,
+            ),
+            lambda: LoreObject(
+                "cave_sign",
+                rect(5 * TILE_SIZE, 5 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                "cave_sign",
+                visible=False,
             ),
             lambda: QuestItem(
                 "quest_totem_b",
@@ -295,6 +303,36 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
             collision_layers=("collision",),
         )
 
+    def cave() -> MapDefinition:
+        interactables: list[Callable[[], Interactable]] = [
+            lambda: DoorInteractable(
+                "cave_exit",
+                rect(34 * TILE_SIZE, 39 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                MAP_OUTSIDE_VILLAGE,
+                (6 * TILE_SIZE, 2 * TILE_SIZE),
+            ),
+            lambda: QuestItem(
+                "cave_heart_shard",
+                rect(7 * TILE_SIZE, 26 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                "cave_chest",
+                "quest_item_collected",
+            ),
+            lambda: LoreObject(
+                "cave_warning_sign",
+                rect(35 * TILE_SIZE, 32 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
+                "cave_warning",
+                visible=False,
+            ),
+        ]
+
+        return MapDefinition(
+            spawn=(34 * TILE_SIZE, 39 * TILE_SIZE),
+            interactables=interactables,
+            colliders=[],
+            tmx_path=ASSETS_DIR / "maps/cave.tmx",
+            collision_layers=("collision",),
+        )
+
     def outside_forest() -> MapDefinition:
         width, height = 1800, 1400
         interactables = [
@@ -329,5 +367,6 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
         MAP_OUTSIDE_VILLAGE: outside_village(),
         MAP_INTERIOR_HOME: interior_home(),
         MAP_OUTSIDE_FOREST: outside_forest(),
+        MAP_CAVE: cave(),
     }
 

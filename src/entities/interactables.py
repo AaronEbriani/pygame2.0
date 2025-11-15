@@ -101,10 +101,20 @@ class DoorInteractable(Interactable):
 
 
 class QuestItem(Interactable):
-    def __init__(self, object_id: str, rect: pygame.Rect, dialogue_id: str, quest_event: str) -> None:
+    def __init__(
+        self,
+        object_id: str,
+        rect: pygame.Rect,
+        dialogue_id: str,
+        quest_event: str,
+        *,
+        visible: bool = False,
+    ) -> None:
         super().__init__(object_id, rect)
         self.dialogue_id = dialogue_id
         self.quest_event = quest_event
+        self.visible = visible
+        self.color = (220, 180, 80)
 
     def interact(self, play_state: PlayStateLike) -> None:
         play_state.begin_dialogue(self.dialogue_id)
@@ -112,19 +122,33 @@ class QuestItem(Interactable):
         self.enabled = False
 
     def draw(self, surface: pygame.Surface, camera_offset: pygame.Vector2) -> None:
+        if not self.visible:
+            return
+        draw_rect = self.rect.move(-camera_offset.x, -camera_offset.y)
+        pygame.draw.rect(surface, self.color, draw_rect)
         return
 
 
 class LoreObject(Interactable):
-    def __init__(self, object_id: str, rect: pygame.Rect, dialogue_id: str) -> None:
+    def __init__(
+        self,
+        object_id: str,
+        rect: pygame.Rect,
+        dialogue_id: str,
+        *,
+        visible: bool = True,
+    ) -> None:
         super().__init__(object_id, rect)
         self.dialogue_id = dialogue_id
+        self.visible = visible
         self.color = (180, 180, 220)
 
     def interact(self, play_state: PlayStateLike) -> None:
         play_state.begin_dialogue(self.dialogue_id)
 
     def draw(self, surface: pygame.Surface, camera_offset: pygame.Vector2) -> None:
+        if not self.visible:
+            return
         draw_rect = self.rect.move(-camera_offset.x, -camera_offset.y)
         pygame.draw.rect(surface, self.color, draw_rect)
 

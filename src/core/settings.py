@@ -18,6 +18,7 @@ KEY_MENU_DOWN = "down"
 MAP_OUTSIDE_VILLAGE = "outside_village"
 MAP_OUTSIDE_FOREST = "outside_forest"
 MAP_INTERIOR_HOME = "interior_home"
+MAP_CAVE = "cave"
 
 # Dialogue settings
 DIALOGUE_FONT_NAME = "freesansbold"
