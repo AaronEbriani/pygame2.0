@@ -65,11 +65,24 @@ class DialogueBox:
             y += rendered.get_height() + 4
 
     def _render_choices(self, surface: pygame.Surface, choices, selected_index: int, area: pygame.Rect) -> None:
-        y = area.bottom - (len(choices) * (self.font.get_height() + 6))
-        for idx, choice in enumerate(choices):
-            prefix = "> " if idx == selected_index else "  "
-            color = (255, 255, 0) if idx == selected_index else (180, 180, 180)
-            rendered = self.font.render(prefix + choice.text, True, color)
-            surface.blit(rendered, (area.left, y))
-            y += rendered.get_height() + 6
+        line_height = self.font.get_height()
+        spacing = 18
+
+        if len(choices) <= 2:
+            y = area.bottom - line_height - 6
+            x = area.left
+            for idx, choice in enumerate(choices):
+                prefix = "> " if idx == selected_index else "  "
+                color = (255, 255, 0) if idx == selected_index else (180, 180, 180)
+                rendered = self.font.render(prefix + choice.text, True, color)
+                surface.blit(rendered, (x, y))
+                x += rendered.get_width() + spacing
+        else:
+            y = area.bottom - (len(choices) * (line_height + 6))
+            for idx, choice in enumerate(choices):
+                prefix = "> " if idx == selected_index else "  "
+                color = (255, 255, 0) if idx == selected_index else (180, 180, 180)
+                rendered = self.font.render(prefix + choice.text, True, color)
+                surface.blit(rendered, (area.left, y))
+                y += rendered.get_height() + 6
 

@@ -37,7 +37,7 @@ class Interactable:
 
 
 class NPC(Interactable):
-    _sprite_cache: dict[Path, pygame.Surface] = {}
+    _sprite_cache: dict[tuple[Path, int, int], pygame.Surface] = {}
 
     def __init__(
         self,
@@ -45,10 +45,15 @@ class NPC(Interactable):
         rect: pygame.Rect,
         dialogue_id: str,
         sprite_path: Path | None = None,
+        *,
+        sprite_columns: int = 3,
+        sprite_rows: int = 4,
     ) -> None:
         super().__init__(object_id, rect)
         self.dialogue_id = dialogue_id
         self.sprite_path = sprite_path if sprite_path is not None else DEFAULT_NPC_SPRITE
+        self.sprite_columns = sprite_columns
+        self.sprite_rows = sprite_rows
 
     def set_dialogue(self, dialogue_id: str) -> None:
         self.dialogue_id = dialogue_id
@@ -57,22 +62,23 @@ class NPC(Interactable):
         play_state.begin_dialogue(self.dialogue_id)
 
     def draw(self, surface: pygame.Surface, camera_offset: pygame.Vector2) -> None:
-        sprite = self._load_sprite(self.sprite_path)
+        sprite = self._load_sprite(self.sprite_path, self.sprite_columns, self.sprite_rows)
         world_rect = self.rect.move(-camera_offset.x, -camera_offset.y)
         sprite_rect = sprite.get_rect(midbottom=world_rect.midbottom)
         surface.blit(sprite, sprite_rect)
 
     @classmethod
-    def _load_sprite(cls, path: Path) -> pygame.Surface:
-        sprite = cls._sprite_cache.get(path)
+    def _load_sprite(cls, path: Path, columns: int, rows: int) -> pygame.Surface:
+        cache_key = (path, columns, rows)
+        sprite = cls._sprite_cache.get(cache_key)
         if sprite is None:
             if not path.exists():
                 raise FileNotFoundError(f"NPC sprite not found at {path}")
             sheet = pygame.image.load(str(path)).convert_alpha()
-            frame_width = sheet.get_width() // 3
-            frame_height = sheet.get_height() // 4
+            frame_width = sheet.get_width() // columns
+            frame_height = sheet.get_height() // rows
             sprite = sheet.subsurface(pygame.Rect(0, 0, frame_width, frame_height)).copy()
-            cls._sprite_cache[path] = sprite
+            cls._sprite_cache[cache_key] = sprite
         return sprite
 
 

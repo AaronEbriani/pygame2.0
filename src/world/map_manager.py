@@ -242,6 +242,8 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
                 rect(50 * TILE_SIZE, 68 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
                 "fisher_intro",
                 sprite_path=ASSETS_DIR / "characters" / "old_fisher.png",
+                sprite_columns=4,
+                sprite_rows=4,
             ),
             lambda: LoreObject(
                 "forest_sign",

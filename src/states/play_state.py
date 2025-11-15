@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pygame
@@ -21,6 +22,10 @@ from world.map_manager import MapManager
 
 if TYPE_CHECKING:
     from game.game import Game
+    from world.map_manager import GameMap
+
+
+ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets"
 
 
 class PlayState(GameState):
@@ -48,6 +53,9 @@ class PlayState(GameState):
         self.focus_interactable: Interactable | None = None
         self.end_screen_active = False
         self.quest_tracker_visible = False
+        self.flash_timer = 0.0
+        self.flash_duration = 0.35
+        self.aaron_spawned = False
 
         self._register_dialogues()
         self.begin_dialogue("home_intro")
@@ -77,11 +85,27 @@ class PlayState(GameState):
         if not self.active_dialogue:
             return
 
-        if event.key in (pygame.K_UP, pygame.K_w):
-            self.active_dialogue.move_choice(-1)
-        elif event.key in (pygame.K_DOWN, pygame.K_s):
-            self.active_dialogue.move_choice(1)
-        elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_e):
+        node = self.active_dialogue.current_node
+        choices = getattr(node, "choices", None)
+        choice_count = len(choices) if choices else 0
+
+        if choice_count:
+            if choice_count <= 2:
+                if event.key in (pygame.K_LEFT, pygame.K_a):
+                    self.active_dialogue.move_choice(-1)
+                    return
+                if event.key in (pygame.K_RIGHT, pygame.K_d):
+                    self.active_dialogue.move_choice(1)
+                    return
+
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.active_dialogue.move_choice(-1)
+                return
+            if event.key in (pygame.K_DOWN, pygame.K_s):
+                self.active_dialogue.move_choice(1)
+                return
+
+        if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_e):
             finished = self.active_dialogue.confirm()
             if finished:
                 self.active_dialogue = None
@@ -113,6 +137,9 @@ class PlayState(GameState):
             self.pending_map_change = None
             self._update_camera()
 
+        if self.flash_timer > 0:
+            self.flash_timer = max(0.0, self.flash_timer - dt)
+
     def draw(self, surface: pygame.Surface) -> None:
         surface.fill((0, 0, 0))
         self.map_manager.draw(surface, self.camera)
@@ -123,6 +150,7 @@ class PlayState(GameState):
         elif not self.end_screen_active:
             self._draw_prompt(surface)
         self._draw_quest_tracker(surface)
+        self._draw_flash(surface)
         if self.end_screen_active:
             self._draw_end_screen(surface)
 
@@ -212,10 +240,17 @@ class PlayState(GameState):
             if fisher and isinstance(fisher, NPC):
                 fisher.set_dialogue("fisher_repeat")
             self.current_prompt = "You obtained a Heart Shard!"
-            self.quest_manager.handle_event(
+            triggered = self.quest_manager.handle_event(
                 "quest_item_collected",
                 {"object_id": "fisher_heart"},
             )
+            for action in triggered:
+                if action == "quest_completed":
+                    self._on_quest_completed()
+            return
+
+        if event_name == "mia_begin_transformation":
+            self._on_all_shards_collected()
             return
 
         triggered = self.quest_manager.handle_event(event_name, payload)
@@ -224,13 +259,51 @@ class PlayState(GameState):
                 self._on_quest_completed()
 
     def _on_quest_completed(self) -> None:
-        npc = self._get_interactable("npc_mia")
-        if npc and isinstance(npc, NPC):
-            npc.set_dialogue("mia_confession")
+        self._transform_mia()
         self.current_prompt = "Return to the cloaked figure when you feel ready."
+
+    def _on_all_shards_collected(self) -> None:
+        self._flash_screen()
+        self._replace_with_aaron()
+        self.current_prompt = None
+        self.focus_interactable = None
+        self.begin_dialogue("aaron_proposal")
 
     def _get_interactable(self, object_id: str) -> Interactable | None:
         return self.map_manager.find_interactable(object_id)
+
+    def _transform_mia(self) -> None:
+        village_map = self.map_manager.maps.get(MAP_OUTSIDE_VILLAGE)
+        if not village_map:
+            return
+
+        mia_rect: pygame.Rect | None = None
+        removed_collider = False
+        for interactable in list(village_map.interactables):
+            if isinstance(interactable, NPC) and interactable.object_id == "npc_mia":
+                mia_rect = interactable.rect.copy()
+                interactable.enabled = False
+                interactable.rect.topleft = (0, 0)
+                for coll_idx, collider in enumerate(list(village_map.colliders)):
+                    if collider == mia_rect:
+                        village_map.colliders.pop(coll_idx)
+                        removed_collider = True
+                        break
+                break
+
+        if mia_rect is None:
+            return
+
+        replacement = NPC(
+            "npc_mia_transformed",
+            mia_rect,
+            "mia_transformation_intro",
+            sprite_path=ASSETS_DIR / "characters" / "cloaked-figure.png",
+        )
+        village_map.interactables.append(replacement)
+        if not removed_collider:
+            village_map.colliders = [c for c in village_map.colliders if c != mia_rect]
+        village_map.colliders.append(mia_rect.copy())
 
     def _update_focus_interactable(self) -> None:
         if self.end_screen_active:
@@ -269,7 +342,8 @@ class PlayState(GameState):
             f"({len(state.items_collected)}/{state.items_required})"
         )
 
-        text_surface = self.quest_font.render(quest_status, True, (255, 255, 255))
+        color = (255, 255, 0) if state.completed else (255, 255, 255)
+        text_surface = self.quest_font.render(quest_status, True, color)
         surface.blit(text_surface, (10, 10))
 
     def _draw_end_screen(self, surface: pygame.Surface) -> None:
@@ -292,6 +366,52 @@ class PlayState(GameState):
         )
         prompt_rect = prompt.get_rect(center=(surface.get_width() // 2, title_y + 110))
         surface.blit(prompt, prompt_rect)
+
+    def _draw_flash(self, surface: pygame.Surface) -> None:
+        if self.flash_timer <= 0:
+            return
+        alpha = int(255 * (self.flash_timer / self.flash_duration))
+        overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+        overlay.fill((255, 255, 255, alpha))
+        surface.blit(overlay, (0, 0))
+
+    def _flash_screen(self) -> None:
+        self.flash_timer = self.flash_duration
+
+    def _replace_with_aaron(self) -> None:
+        if self.aaron_spawned:
+            return
+
+        current_map = self.map_manager.current_map
+        if not current_map:
+            return
+
+        rect = None
+        for idx, interactable in enumerate(list(current_map.interactables)):
+            if isinstance(interactable, NPC) and interactable.object_id == "npc_mia":
+                rect = interactable.rect.copy()
+                current_map.interactables.pop(idx)
+                for coll_idx, collider in enumerate(list(current_map.colliders)):
+                    if collider == rect:
+                        current_map.colliders.pop(coll_idx)
+                        break
+                break
+
+        if rect is None:
+            return
+
+        aaron_sprite = ASSETS_DIR / "characters" / "aaron.png"
+        aaron_npc = NPC(
+            "npc_aaron",
+            rect,
+            "aaron_proposal",
+            sprite_path=aaron_sprite,
+            sprite_columns=4,
+            sprite_rows=4,
+        )
+        current_map.interactables.append(aaron_npc)
+        current_map.colliders.append(rect.copy())
+        self.aaron_spawned = True
 
     def _register_dialogues(self) -> None:
         dm = self.dialogue_manager
@@ -438,6 +558,77 @@ class PlayState(GameState):
                     "The Heart Gem shines brightest when it's shared.",
                     next_id=None,
                 )
+            ],
+        )
+
+        dm.register(
+            "mia_transformation_intro",
+            [
+                DialogueNode(
+                    "root",
+                    "You found them all. The Heart Gem waits.",
+                    next_id="line2",
+                ),
+                DialogueNode(
+                    "line2",
+                    "But... there's one last thing it needs.",
+                    next_id="line3",
+                ),
+                DialogueNode(
+                    "line3",
+                    "It must know who your heart truly beats for.",
+                    next_id=None,
+                    exit_event="mia_begin_transformation",
+                ),
+            ],
+        )
+
+        dm.register(
+            "aaron_proposal",
+            [
+                DialogueNode(
+                    "root",
+                    "You’ve gathered every shard…",
+                    next_id="line2",
+                ),
+                DialogueNode(
+                    "line2",
+                    "You’ve proven your heart’s warmth, your courage, your care…",
+                    next_id="line3",
+                ),
+                DialogueNode(
+                    "line3",
+                    "So now there’s only one question left.",
+                    next_id="line4",
+                ),
+                DialogueNode(
+                    "line4",
+                    "Dayana...",
+                    next_id="question",
+                ),
+                DialogueNode(
+                    "question",
+                    "Will you be my girlfriend?",
+                    choices=[
+                        DialogueChoice("[ Yes ]", next_id="accept"),
+                        DialogueChoice("[ Of course 💞 ]", next_id="accept"),
+                    ],
+                ),
+                DialogueNode(
+                    "accept",
+                    "You completed the Quest for the Heart Gem!",
+                    next_id="accept_2",
+                ),
+                DialogueNode(
+                    "accept_2",
+                    "A new adventure begins — together.",
+                ),
+                DialogueNode(
+                    "ending",
+                    "The Heart Gem shines brightest when it's shared.",
+                    next_id=None,
+                    exit_event="show_ending",
+                ),
             ],
         )
 
