@@ -79,10 +79,20 @@ class GameMap:
             self._draw_collision_debug()
 
         self.interactables = [factory() for factory in definition.interactables]
+        door_rects: list[pygame.Rect] = []
         for interactable in self.interactables:
             if isinstance(interactable, QuestItem):
                 continue
+            if isinstance(interactable, DoorInteractable):
+                door_rects.append(interactable.rect.copy())
+                continue
             self.colliders.append(interactable.rect.copy())
+        if door_rects:
+            self.colliders = [
+                rect
+                for rect in self.colliders
+                if not any(rect.colliderect(door_rect) for door_rect in door_rects)
+            ]
         if definition.tmx_path is not None:
             tmx_interactables = self._load_tmx_interactables(definition)
             if tmx_interactables:
@@ -211,9 +221,9 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
         interactables: list[Callable[[], Interactable]] = [
             lambda: DoorInteractable(
                 "home_front_door",
-                rect(53 * 16 - 8, 24 * 16 - 16, 32, 48),
+                rect(53 * TILE_SIZE, 25 * TILE_SIZE, TILE_SIZE, TILE_SIZE),
                 MAP_INTERIOR_HOME,
-                (220, 360),
+                (31 * TILE_SIZE, 38 * TILE_SIZE),
             ),
             lambda: NPC(
                 "npc_mia",
@@ -267,35 +277,22 @@ def _create_map_definitions() -> dict[str, MapDefinition]:
         )
 
     def interior_home() -> MapDefinition:
-        width, height = 640, 480
+        door_rect = rect(31 * TILE_SIZE, 39 * TILE_SIZE, TILE_SIZE * 2, TILE_SIZE)
         interactables = [
             lambda: DoorInteractable(
                 "home_exit",
-                rect(width // 2 - 32, height - 96, 64, 64),
+                door_rect,
                 MAP_OUTSIDE_VILLAGE,
-                (760, 620),
+                (53 * TILE_SIZE, 25 * TILE_SIZE),
             ),
-            lambda: LoreObject(
-                "bookshelf",
-                rect(120, 120, 80, 80),
-                "bookshelf",
-            ),
-        ]
-
-        colliders = [
-            rect(0, 0, width, 48),
-            rect(0, height - 32, width, 32),
-            rect(0, 0, 32, height),
-            rect(width - 32, 0, 32, height),
-            rect(200, 200, 240, 80),
         ]
 
         return MapDefinition(
-            spawn=(width // 2, height - 120),
+            spawn=(31 * TILE_SIZE, 38 * TILE_SIZE),
             interactables=interactables,
-            colliders=colliders,
-            size=(width, height),
-            color=(190, 170, 140),
+            colliders=[],
+            tmx_path=ASSETS_DIR / "maps/home.tmx",
+            collision_layers=("collision",),
         )
 
     def outside_forest() -> MapDefinition:

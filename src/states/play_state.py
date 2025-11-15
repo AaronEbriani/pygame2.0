@@ -6,7 +6,13 @@ import pygame
 
 from core.dialogue import DialogueChoice, DialogueManager, DialogueNode, DialogueSession
 from core.quests import QuestManager
-from core.settings import MAP_OUTSIDE_FOREST, MAP_OUTSIDE_VILLAGE, QUEST_FIND_ARTIFACTS
+from core.settings import (
+    MAP_INTERIOR_HOME,
+    MAP_OUTSIDE_FOREST,
+    MAP_OUTSIDE_VILLAGE,
+    QUEST_FIND_ARTIFACTS,
+    TILE_SIZE,
+)
 from core.state import GameState
 from entities.interactables import Interactable, NPC
 from entities.player import Player
@@ -21,7 +27,7 @@ class PlayState(GameState):
     def __init__(self, game: "Game"):
         super().__init__(game)
         self.map_manager = MapManager()
-        spawn = self.map_manager.load_map(MAP_OUTSIDE_VILLAGE)
+        spawn = self.map_manager.load_map(MAP_INTERIOR_HOME, (36 * TILE_SIZE, 29 * TILE_SIZE))
         self.player = Player(spawn)
         self.camera = pygame.Vector2()
         self.view_width, self.view_height = self.game.view_size
@@ -43,6 +49,7 @@ class PlayState(GameState):
         self.end_screen_active = False
 
         self._register_dialogues()
+        self.begin_dialogue("home_intro")
 
     def enter(self, previous_state: str | None = None) -> None:
         self._update_camera()
@@ -176,6 +183,10 @@ class PlayState(GameState):
             self.focus_interactable = None
             return
 
+        if event_name == "home_intro_end":
+            self.current_prompt = "Someone's knocking. Maybe I should check the door."
+            return
+
         triggered = self.quest_manager.handle_event(event_name, payload)
         for action in triggered:
             if action == "quest_completed":
@@ -250,6 +261,28 @@ class PlayState(GameState):
 
     def _register_dialogues(self) -> None:
         dm = self.dialogue_manager
+
+        dm.register(
+            "home_intro",
+            [
+                DialogueNode(
+                    "root",
+                    "Ah what a beautiful morning to start the day.",
+                    next_id="line2",
+                ),
+                DialogueNode(
+                    "line2",
+                    "I wonder who's that knocking at the door.",
+                    next_id="line3",
+                ),
+                DialogueNode(
+                    "line3",
+                    "I better check who it is, it might be important.",
+                    next_id=None,
+                    exit_event="home_intro_end",
+                ),
+            ],
+        )
 
         dm.register(
             "mia_intro",
