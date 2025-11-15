@@ -259,7 +259,7 @@ class PlayState(GameState):
                 self._on_quest_completed()
 
     def _on_quest_completed(self) -> None:
-        self._transform_mia()
+        self._set_mia_dialogue("mia_transformation_intro")
         self.current_prompt = "Return to the cloaked figure when you feel ready."
 
     def _on_all_shards_collected(self) -> None:
@@ -273,37 +273,9 @@ class PlayState(GameState):
         return self.map_manager.find_interactable(object_id)
 
     def _transform_mia(self) -> None:
-        village_map = self.map_manager.maps.get(MAP_OUTSIDE_VILLAGE)
-        if not village_map:
+        rect = self._swap_mia_for_aaron()
+        if rect is None:
             return
-
-        mia_rect: pygame.Rect | None = None
-        removed_collider = False
-        for interactable in list(village_map.interactables):
-            if isinstance(interactable, NPC) and interactable.object_id == "npc_mia":
-                mia_rect = interactable.rect.copy()
-                interactable.enabled = False
-                interactable.rect.topleft = (0, 0)
-                for coll_idx, collider in enumerate(list(village_map.colliders)):
-                    if collider == mia_rect:
-                        village_map.colliders.pop(coll_idx)
-                        removed_collider = True
-                        break
-                break
-
-        if mia_rect is None:
-            return
-
-        replacement = NPC(
-            "npc_mia_transformed",
-            mia_rect,
-            "mia_transformation_intro",
-            sprite_path=ASSETS_DIR / "characters" / "cloaked-figure.png",
-        )
-        village_map.interactables.append(replacement)
-        if not removed_collider:
-            village_map.colliders = [c for c in village_map.colliders if c != mia_rect]
-        village_map.colliders.append(mia_rect.copy())
 
     def _update_focus_interactable(self) -> None:
         if self.end_screen_active:
@@ -361,11 +333,20 @@ class PlayState(GameState):
             rect = rendered.get_rect(center=(surface.get_width() // 2, title_y + idx * 40))
             surface.blit(rendered, rect)
 
-        prompt = self.end_message_font.render(
-            "Press Enter to return to the main menu.", True, (220, 220, 220)
-        )
-        prompt_rect = prompt.get_rect(center=(surface.get_width() // 2, title_y + 110))
-        surface.blit(prompt, prompt_rect)
+        y = title_y + 110
+        lines = [
+            "You completed the Quest for the Heart Gem!",
+            "A new adventure begins — together.",
+            "",
+            "The Heart Gem shines brightest when it’s shared.",
+            "",
+            "Press Enter to return to the main menu.",
+        ]
+        for line in lines:
+            rendered = self.end_message_font.render(line, True, (220, 220, 220))
+            rect = rendered.get_rect(center=(surface.get_width() // 2, y))
+            surface.blit(rendered, rect)
+            y += rendered.get_height() + 6
 
     def _draw_flash(self, surface: pygame.Surface) -> None:
         if self.flash_timer <= 0:
@@ -379,39 +360,57 @@ class PlayState(GameState):
         self.flash_timer = self.flash_duration
 
     def _replace_with_aaron(self) -> None:
-        if self.aaron_spawned:
-            return
-
-        current_map = self.map_manager.current_map
-        if not current_map:
-            return
-
-        rect = None
-        for idx, interactable in enumerate(list(current_map.interactables)):
-            if isinstance(interactable, NPC) and interactable.object_id == "npc_mia":
-                rect = interactable.rect.copy()
-                current_map.interactables.pop(idx)
-                for coll_idx, collider in enumerate(list(current_map.colliders)):
-                    if collider == rect:
-                        current_map.colliders.pop(coll_idx)
-                        break
-                break
-
+        rect = self._swap_mia_for_aaron()
         if rect is None:
             return
 
-        aaron_sprite = ASSETS_DIR / "characters" / "aaron.png"
-        aaron_npc = NPC(
-            "npc_aaron",
-            rect,
-            "aaron_proposal",
-            sprite_path=aaron_sprite,
-            sprite_columns=4,
-            sprite_rows=4,
-        )
-        current_map.interactables.append(aaron_npc)
-        current_map.colliders.append(rect.copy())
-        self.aaron_spawned = True
+    def _swap_mia_for_aaron(self) -> pygame.Rect | None:
+        current_map = self.map_manager.current_map
+        if not current_map:
+            return None
+
+        mia_rect: pygame.Rect | None = None
+        for interactable in current_map.interactables:
+            if isinstance(interactable, NPC) and interactable.object_id == "npc_mia":
+                mia_rect = interactable.rect.copy()
+                interactable.enabled = False
+                interactable.rect.topleft = (0, 0)
+                break
+
+        if mia_rect is None:
+            return None
+
+        current_map.colliders = [c for c in current_map.colliders if c != mia_rect]
+
+        if not self.aaron_spawned:
+            aaron_sprite = ASSETS_DIR / "characters" / "aaron.png"
+            aaron_npc = NPC(
+                "npc_aaron",
+                mia_rect,
+                "aaron_proposal",
+                sprite_path=aaron_sprite,
+                sprite_columns=4,
+                sprite_rows=4,
+            )
+            current_map.interactables.append(aaron_npc)
+            current_map.colliders.append(mia_rect.copy())
+            self.aaron_spawned = True
+
+        return mia_rect
+
+    def _set_mia_dialogue(self, dialogue_id: str) -> None:
+        maps: list["GameMap"] = []
+        if self.map_manager.current_map:
+            maps.append(self.map_manager.current_map)
+        village_map = self.map_manager.maps.get(MAP_OUTSIDE_VILLAGE)
+        if village_map and village_map not in maps:
+            maps.append(village_map)
+
+        for game_map in maps:
+            for interactable in game_map.interactables:
+                if isinstance(interactable, NPC) and interactable.object_id == "npc_mia":
+                    interactable.set_dialogue(dialogue_id)
+                    interactable.enabled = True
 
     def _register_dialogues(self) -> None:
         dm = self.dialogue_manager
@@ -610,22 +609,13 @@ class PlayState(GameState):
                     "question",
                     "Will you be my girlfriend?",
                     choices=[
-                        DialogueChoice("[ Yes ]", next_id="accept"),
-                        DialogueChoice("[ Of course 💞 ]", next_id="accept"),
+                        DialogueChoice("Yes", next_id="accept"),
+                        DialogueChoice("Of course", next_id="accept"),
                     ],
                 ),
                 DialogueNode(
                     "accept",
-                    "You completed the Quest for the Heart Gem!",
-                    next_id="accept_2",
-                ),
-                DialogueNode(
-                    "accept_2",
-                    "A new adventure begins — together.",
-                ),
-                DialogueNode(
-                    "ending",
-                    "The Heart Gem shines brightest when it's shared.",
+                    "",
                     next_id=None,
                     exit_event="show_ending",
                 ),
